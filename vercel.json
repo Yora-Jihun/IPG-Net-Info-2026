@@ -1,0 +1,7 @@
+{
+  "name": "space-app",
+  "regions": ["sfo1"],
+  "env": {
+    "INFO_TOKEN": "@info_token"
+  }
+}

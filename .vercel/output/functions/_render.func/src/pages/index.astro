@@ -1,0 +1,311 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout>
+  <section class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white p-6">
+    <div class="max-w-4xl mx-auto">
+      <!-- Header -->
+      <div class="mb-12">
+        <h1 class="text-4xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">Location Intelligence</h1>
+        <p class="text-slate-400 text-lg">Real-time geolocation and network information</p>
+      </div>
+
+      <!-- Status Card -->
+      <div id="statusCard" class="mb-8 p-6 bg-slate-700/50 border border-slate-600 rounded-xl backdrop-blur">
+        <div class="flex items-center space-x-3">
+          <div id="statusIndicator" class="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+          <p id="statusMsg" class="text-slate-200 font-medium">Detecting location...</p>
+        </div>
+      </div>
+
+      <!-- Error Message -->
+      <div id="errorMsg" class="mb-8 p-4 bg-red-900/30 border border-red-700/50 rounded-lg text-red-200 hidden"></div>
+
+      <!-- GPS Section -->
+      <div id="gpsSection" class="mb-8 hidden">
+        <div class="bg-slate-700/40 border border-slate-600 rounded-xl p-8 backdrop-blur">
+          <h2 class="text-2xl font-semibold mb-6 text-slate-100">GPS Location</h2>
+          <div id="gpsDetails" class="grid grid-cols-2 gap-6 md:grid-cols-3"></div>
+        </div>
+      </div>
+
+      <!-- IP & Network Section -->
+      <div id="ipSection" class="mb-8 hidden">
+        <div class="bg-slate-700/40 border border-slate-600 rounded-xl p-8 backdrop-blur">
+          <h2 class="text-2xl font-semibold mb-6 text-slate-100">Network Information</h2>
+          <div id="ipDetails" class="grid grid-cols-2 gap-6 md:grid-cols-3"></div>
+        </div>
+      </div>
+
+      <!-- Request Button -->
+      <button id="requestLocationBtn" class="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 rounded-lg font-semibold text-white transition transform hover:scale-105 hidden">
+        Enable GPS Location
+      </button>
+    </div>
+  </section>
+</Layout>
+
+<style is:global>
+  .data-label {
+    color: #3b82f6;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+
+  .data-value {
+    color: #e2e8f0;
+    font-weight: 600;
+    font-size: 1.125rem;
+    margin-top: 0.5rem;
+  }
+
+  .data-item {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Color-coded labels */
+  .label-gps {
+    color: #3b82f6 !important;
+    font-weight: 600;
+  }
+
+  .label-network {
+    color: #3b82f6 !important;
+    font-weight: 600;
+  }
+
+  .label-location {
+    color: #3b82f6 !important;
+    font-weight: 600;
+  }
+
+  .label-tech {
+    color: #3b82f6 !important;
+    font-weight: 600;
+  }
+
+  .status-success {
+    color: #10b981;
+  }
+
+  .status-loading {
+    color: #f59e0b;
+  }
+
+  .status-error {
+    color: #ef4444;
+  }
+</style>
+
+<script>
+  // @ts-nocheck
+  
+  // DOM Elements
+  const gpsSection = document.getElementById("gpsSection");
+  const ipSection = document.getElementById("ipSection");
+  const gpsDetails = document.getElementById("gpsDetails");
+  const ipDetails = document.getElementById("ipDetails");
+  const statusMsg = document.getElementById("statusMsg");
+  const statusIndicator = document.getElementById("statusIndicator");
+  const errorMsg = document.getElementById("errorMsg");
+  const requestBtn = document.getElementById("requestLocationBtn");
+
+  // Helper Functions
+  const showStatus = (msg, type = 'loading') => {
+    statusMsg.textContent = msg;
+    statusIndicator.className = 'w-3 h-3 rounded-full';
+    statusIndicator.classList.remove('animate-pulse');
+    
+    if (type === 'loading') {
+      statusIndicator.classList.add('bg-yellow-500', 'animate-pulse');
+    } else if (type === 'success') {
+      statusIndicator.classList.add('bg-green-500');
+    } else if (type === 'error') {
+      statusIndicator.classList.add('bg-red-500');
+    }
+  };
+
+  const showError = (msg) => {
+    errorMsg.textContent = msg;
+    errorMsg.classList.remove("hidden");
+  };
+
+  const hideError = () => {
+    errorMsg.classList.add("hidden");
+  };
+
+  const createDataItem = (label, value, category = 'tech') => {
+    const categoryClass = `label-${category}`;
+    return `
+      <div class="data-item">
+        <span class="data-label ${categoryClass}">${label}</span>
+        <span class="data-value">${value}</span>
+      </div>
+    `;
+  };
+
+  const showGPS = (gps) => {
+    gpsSection.classList.remove("hidden");
+    let html = `
+      ${createDataItem('Latitude', gps.latitude.toFixed(6) + '°', 'gps')}
+      ${createDataItem('Longitude', gps.longitude.toFixed(6) + '°', 'gps')}
+      ${createDataItem('Accuracy', '±' + gps.accuracy.toFixed(0) + 'm', 'gps')}
+      ${gps.altitude !== null ? createDataItem('Altitude', gps.altitude.toFixed(0) + 'm', 'gps') : ''}
+      ${gps.heading !== null ? createDataItem('Heading', gps.heading.toFixed(0) + '°', 'gps') : ''}
+      ${gps.speed !== null ? createDataItem('Speed', (gps.speed * 3.6).toFixed(1) + ' km/h', 'gps') : ''}
+    `;
+    gpsDetails.innerHTML = html;
+  };
+
+  const showIP = (ip) => {
+    ipSection.classList.remove("hidden");
+    let html = '';
+    
+    if (ip.localIP) html += createDataItem('Local IP', ip.localIP, 'network');
+    if (ip.publicIP) html += createDataItem('Public IP', ip.publicIP, 'network');
+    if (ip.ip) html += createDataItem('IP Address', ip.ip, 'network');
+    if (ip.country) html += createDataItem('Country', ip.country, 'location');
+    if (ip.region) html += createDataItem('Region', ip.region, 'location');
+    if (ip.city) html += createDataItem('City', ip.city, 'location');
+    if (ip.postal) html += createDataItem('Postal Code', ip.postal, 'location');
+    if (ip.timezone) html += createDataItem('Timezone', ip.timezone, 'location');
+    if (ip.org) html += createDataItem('ISP', ip.org, 'tech');
+    if (ip.hostname) html += createDataItem('Hostname', ip.hostname, 'tech');
+    if (ip.loc) html += createDataItem('Coordinates', ip.loc, 'gps');
+    
+    ipDetails.innerHTML = html;
+  };
+
+  const fetchIPInfo = async () => {
+    try {
+      const response = await fetch("/api/ipinfo");
+      const data = await response.json();
+      
+      if (data.error) {
+        console.error("API Error:", data.error);
+        return null;
+      }
+      
+      console.log("IP Info:", data);
+      return data;
+    } catch (err) {
+      console.error("Failed to fetch IP info:", err);
+      return null;
+    }
+  };
+
+  const requestGPS = async () => {
+    requestBtn.classList.add("hidden");
+    showStatus("Requesting GPS access...", "loading");
+    hideError();
+    
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const { latitude, longitude, accuracy, altitude, heading, speed } = pos.coords;
+          
+          showStatus("Location detected, fetching details...", "loading");
+          
+          showGPS({ latitude, longitude, accuracy, altitude, heading, speed });
+          
+          const ipData = await fetchIPInfo();
+          if (ipData) {
+            showIP(ipData);
+            showStatus("All information loaded", "success");
+            hideError();
+          } else {
+            showError("Could not fetch network information");
+            showStatus("GPS loaded (network info unavailable)", "success");
+          }
+        },
+        async (err) => {
+          let errorText = "Unknown GPS error";
+          if (err.code === 1) {
+            errorText = "GPS permission was denied. Please enable location access in your browser settings.";
+          } else if (err.code === 2) {
+            errorText = "GPS position is unavailable";
+          } else if (err.code === 3) {
+            errorText = "GPS request timed out";
+          }
+          
+          showError(errorText);
+          showStatus("Using network-based location...", "loading");
+          
+          const ipData = await fetchIPInfo();
+          if (ipData) {
+            showIP(ipData);
+            showStatus("Network-based location loaded", "success");
+          } else {
+            showStatus("Unable to detect location", "error");
+          }
+        },
+        { timeout: 10000, enableHighAccuracy: true }
+      );
+    } else {
+      showError("GPS is not supported by your browser");
+      showStatus("Using network-based location...", "loading");
+      const ipData = await fetchIPInfo();
+      if (ipData) {
+        showIP(ipData);
+        showStatus("Network-based location loaded", "success");
+      }
+    }
+  };
+
+  // Initial load
+  (async () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const { latitude, longitude, accuracy, altitude, heading, speed } = pos.coords;
+          
+          showStatus("Location detected", "success");
+          showGPS({ latitude, longitude, accuracy, altitude, heading, speed });
+          
+          const ipData = await fetchIPInfo();
+          if (ipData) {
+            showIP(ipData);
+            showStatus("All information loaded", "success");
+          } else {
+            showStatus("GPS loaded (network info unavailable)", "success");
+          }
+        },
+        async (err) => {
+          if (err.code === 1) {
+            showStatus("GPS permission required", "error");
+            showError("Enable location in your browser settings to use GPS, or click the button below.");
+            requestBtn.classList.remove("hidden");
+            
+            const ipData = await fetchIPInfo();
+            if (ipData) {
+              showIP(ipData);
+            }
+          } else {
+            showStatus("Using network-based location...", "loading");
+            const ipData = await fetchIPInfo();
+            if (ipData) {
+              showIP(ipData);
+              showStatus("Network-based location loaded", "success");
+              hideError();
+            } else {
+              showStatus("Unable to detect location", "error");
+            }
+          }
+        },
+        { timeout: 5000, enableHighAccuracy: true }
+      );
+    } else {
+      showStatus("Using network-based location...", "loading");
+      const ipData = await fetchIPInfo();
+      if (ipData) {
+        showIP(ipData);
+        showStatus("Network-based location loaded", "success");
+      }
+    }
+  })();
+
+  requestBtn.addEventListener("click", requestGPS);
+</script>

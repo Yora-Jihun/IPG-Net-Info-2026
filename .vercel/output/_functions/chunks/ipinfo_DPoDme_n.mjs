@@ -29,7 +29,7 @@ async function GET({ request, clientAddress }) {
       publicIP = ip;
     }
     const lookupIP = publicIP || ip;
-    const token = process.env.INFO_TOKEN || undefined                          ;
+    const token = process.env.INFO_TOKEN || "5779678ae682d8";
     const url = token ? `https://ipinfo.io/${lookupIP}/json?token=${token}` : `https://ipinfo.io/${lookupIP}/json`;
     console.log("Fetching IP info for:", lookupIP);
     const response = await fetch(url, {

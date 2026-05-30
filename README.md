@@ -34,4 +34,4 @@ Created by **Yora Ji-hun**
 
 ## License
 
-MIT
+MIT is not yet setup

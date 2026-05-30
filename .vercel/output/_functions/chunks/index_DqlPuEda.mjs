@@ -1,6 +1,6 @@
-import { c as createComponent } from './astro-component_D6No9iEw.mjs';
+import { c as createComponent } from './astro-component_BVqn-b9n.mjs';
 import 'piccolore';
-import { k as createRenderInstruction, j as addAttribute, s as renderHead, t as renderSlot, u as renderTemplate, q as renderComponent, p as maybeRenderHead } from './entrypoint_DlnL6Pn6.mjs';
+import { k as createRenderInstruction, j as addAttribute, s as renderHead, t as renderSlot, u as renderTemplate, q as renderComponent, p as maybeRenderHead } from './entrypoint_BoHauJEk.mjs';
 import 'clsx';
 
 async function renderScript(result, id) {

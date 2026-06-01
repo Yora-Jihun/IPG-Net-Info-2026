@@ -58,6 +58,7 @@ export async function GET({ request, clientAddress }) {
       });
       if (!locationiqResponse.ok) throw new Error(`LocationIQ error! status: ${locationiqResponse.status}`);
       const locationiqData = await locationiqResponse.json();
+      console.log("LocationIQ Response:", JSON.stringify(locationiqData, null, 2));
       const addr = locationiqData.address || {};
       return {
         latitude: latitude.toString(),

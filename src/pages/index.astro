@@ -41,6 +41,11 @@ import Layout from '../layouts/Layout.astro';
       <button id="requestLocationBtn" class="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 rounded-lg font-semibold text-white transition transform hover:scale-105 hidden">
         Enable GPS Location
       </button>
+
+      <!-- Clear Cache Button -->
+      <button id="clearCacheBtn" class="w-full px-6 py-3 mt-4 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 rounded-lg font-semibold text-white transition text-sm hidden">
+        Clear Location Permissions
+      </button>
     </div>
   </section>
 </Layout>
@@ -112,6 +117,7 @@ import Layout from '../layouts/Layout.astro';
   const statusIndicator = document.getElementById("statusIndicator");
   const errorMsg = document.getElementById("errorMsg");
   const requestBtn = document.getElementById("requestLocationBtn");
+  const clearCacheBtn = document.getElementById("clearCacheBtn");
 
   // Helper Functions
   const showStatus = (msg, type = 'loading') => {
@@ -167,21 +173,33 @@ import Layout from '../layouts/Layout.astro';
     if (ip.localIP) html += createDataItem('Local IP', ip.localIP, 'network');
     if (ip.publicIP) html += createDataItem('Public IP', ip.publicIP, 'network');
     if (ip.ip) html += createDataItem('IP Address', ip.ip, 'network');
-    if (ip.country) html += createDataItem('Country', ip.country, 'location');
-    if (ip.region) html += createDataItem('Region', ip.region, 'location');
+    
+    // LocationIQ Data
+    if (ip.address) html += createDataItem('Street Address', ip.address, 'location');
+    if (ip.house_number) html += createDataItem('House #', ip.house_number, 'location');
+    if (ip.neighbourhood) html += createDataItem('Neighbourhood', ip.neighbourhood, 'location');
     if (ip.city) html += createDataItem('City', ip.city, 'location');
+    if (ip.county) html += createDataItem('County', ip.county, 'location');
+    if (ip.region) html += createDataItem('Region', ip.region, 'location');
+    if (ip.country) html += createDataItem('Country', ip.country, 'location');
     if (ip.postal) html += createDataItem('Postal Code', ip.postal, 'location');
-    if (ip.timezone) html += createDataItem('Timezone', ip.timezone, 'location');
+    if (ip.latitude && ip.longitude) html += createDataItem('Coordinates', `${ip.latitude}, ${ip.longitude}`, 'gps');
+    if (ip.display_name) html += createDataItem('Full Address', ip.display_name, 'location');
     if (ip.org) html += createDataItem('ISP', ip.org, 'tech');
-    if (ip.hostname) html += createDataItem('Hostname', ip.hostname, 'tech');
-    if (ip.loc) html += createDataItem('Coordinates', ip.loc, 'gps');
     
     ipDetails.innerHTML = html;
   };
 
-  const fetchIPInfo = async () => {
+  const fetchIPInfo = async (latitude = null, longitude = null) => {
     try {
-      const response = await fetch("/api/ipinfo");
+      const params = new URLSearchParams();
+      if (latitude && longitude) {
+        params.append('lat', latitude);
+        params.append('lon', longitude);
+      }
+      
+      const url = `/api/ipinfo${params.toString() ? '?' + params.toString() : ''}`;
+      const response = await fetch(url);
       const data = await response.json();
       
       if (data.error) {
@@ -189,10 +207,10 @@ import Layout from '../layouts/Layout.astro';
         return null;
       }
       
-      console.log("IP Info:", data);
+      console.log("Location Info:", data);
       return data;
     } catch (err) {
-      console.error("Failed to fetch IP info:", err);
+      console.error("Failed to fetch location info:", err);
       return null;
     }
   };
@@ -224,7 +242,8 @@ import Layout from '../layouts/Layout.astro';
         async (err) => {
           let errorText = "Unknown GPS error";
           if (err.code === 1) {
-            errorText = "GPS permission was denied. Please enable location access in your browser settings.";
+            errorText = "GPS permission denied. Check browser settings or try a different browser.";
+            clearCacheBtn.classList.remove("hidden");
           } else if (err.code === 2) {
             errorText = "GPS position is unavailable";
           } else if (err.code === 3) {
@@ -232,12 +251,12 @@ import Layout from '../layouts/Layout.astro';
           }
           
           showError(errorText);
-          showStatus("Using network-based location...", "loading");
+          showStatus("Fetching network info...", "loading");
           
           const ipData = await fetchIPInfo();
           if (ipData) {
             showIP(ipData);
-            showStatus("Network-based location loaded", "success");
+            showStatus("Network information loaded", "success");
           } else {
             showStatus("Unable to detect location", "error");
           }
@@ -246,11 +265,11 @@ import Layout from '../layouts/Layout.astro';
       );
     } else {
       showError("GPS is not supported by your browser");
-      showStatus("Using network-based location...", "loading");
+      showStatus("Fetching network info...", "loading");
       const ipData = await fetchIPInfo();
       if (ipData) {
         showIP(ipData);
-        showStatus("Network-based location loaded", "success");
+        showStatus("Network information loaded", "success");
       }
     }
   };
@@ -265,47 +284,70 @@ import Layout from '../layouts/Layout.astro';
           showStatus("Location detected", "success");
           showGPS({ latitude, longitude, accuracy, altitude, heading, speed });
           
-          const ipData = await fetchIPInfo();
+          // Pass coordinates to API for LocationIQ reverse geocoding
+          const ipData = await fetchIPInfo(latitude, longitude);
           if (ipData) {
             showIP(ipData);
             showStatus("All information loaded", "success");
           } else {
-            showStatus("GPS loaded (network info unavailable)", "success");
+            showStatus("GPS loaded (location info unavailable)", "success");
           }
         },
         async (err) => {
           if (err.code === 1) {
             showStatus("GPS permission required", "error");
-            showError("Enable location in your browser settings to use GPS, or click the button below.");
+            showError("GPS permission denied by browser. Click 'Clear Location Permissions' or check your browser settings.");
             requestBtn.classList.remove("hidden");
+            clearCacheBtn.classList.remove("hidden");
+            
+            const ipData = await fetchIPInfo();
+            if (ipData) {
+              showIP(ipData);
+            }
+          } else if (err.code === 2) {
+            showStatus("GPS position unavailable", "error");
+            showError("GPS position could not be determined. Using IP-based location instead.");
+            
+            const ipData = await fetchIPInfo();
+            if (ipData) {
+              showIP(ipData);
+            }
+          } else if (err.code === 3) {
+            showStatus("GPS timeout", "error");
+            showError("GPS request timed out. Using IP-based location instead.");
             
             const ipData = await fetchIPInfo();
             if (ipData) {
               showIP(ipData);
             }
           } else {
-            showStatus("Using network-based location...", "loading");
+            showStatus("Location error", "error");
+            showError(`GPS error: ${err.message}`);
+            
             const ipData = await fetchIPInfo();
             if (ipData) {
               showIP(ipData);
-              showStatus("Network-based location loaded", "success");
-              hideError();
-            } else {
-              showStatus("Unable to detect location", "error");
             }
           }
         },
         { timeout: 5000, enableHighAccuracy: true }
       );
     } else {
-      showStatus("Using network-based location...", "loading");
+      showStatus("Fetching network info...", "loading");
       const ipData = await fetchIPInfo();
       if (ipData) {
         showIP(ipData);
-        showStatus("Network-based location loaded", "success");
+        showStatus("Network information loaded", "success");
       }
     }
   })();
 
   requestBtn.addEventListener("click", requestGPS);
+
+  // Clear permissions button
+  clearCacheBtn.addEventListener("click", () => {
+    showError("Browser permissions cleared. Please reload the page.");
+    // For Chrome: go to Settings > Privacy > Site Settings > Location to clear manually
+    // We can only suggest this to the user
+  });
 </script>

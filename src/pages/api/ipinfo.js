@@ -38,43 +38,69 @@ export async function GET({ request, clientAddress }) {
       publicIP = ip;
     }
 
-    // Use public IP for ipinfo lookup
     const lookupIP = publicIP || ip;
 
-    // Get token from environment variables
-    const token = process.env.INFO_TOKEN || import.meta.env.INFO_TOKEN;
-    const url = token 
-      ? `https://ipinfo.io/${lookupIP}/json?token=${token}` 
-      : `https://ipinfo.io/${lookupIP}/json`;
-
-    console.log('Fetching IP info for:', lookupIP);
-
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'IPG-App/1.0' }
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    // Get LocationIQ API key
+    const locationiqKey = process.env.LOCATIONIQ_KEY || import.meta.env.LOCATIONIQ_KEY;
+    if (!locationiqKey) {
+      throw new Error('LocationIQ API key not configured in .env');
     }
 
-    const data = await response.json();
-    console.log("IPInfo API Response:", data);
+    // Parse query parameters for coordinates
+    const url = new URL(request.url);
+    const lat = url.searchParams.get('lat');
+    const lon = url.searchParams.get('lon');
+
+    let locationData = {};
+
+    // If coordinates are provided, use LocationIQ reverse geocoding
+    if (lat && lon) {
+      try {
+        const locationiqUrl = `https://us1.locationiq.com/v1/reverse.php?key=${locationiqKey}&lat=${lat}&lon=${lon}&format=json`;
+        console.log('Fetching LocationIQ reverse geocoding for:', `${lat},${lon}`);
+
+        const locationiqResponse = await fetch(locationiqUrl, {
+          headers: { 'User-Agent': 'IPG-App/1.0' }
+        });
+
+        if (locationiqResponse.ok) {
+          const locationiqData = await locationiqResponse.json();
+          console.log("LocationIQ Response:", locationiqData);
+
+          // Extract detailed address information from LocationIQ
+          const addr = locationiqData.address || {};
+          locationData = {
+            latitude: lat,
+            longitude: lon,
+            address: addr.road || '',
+            house_number: addr.house_number || '',
+            neighbourhood: addr.neighbourhood || '',
+            city: addr.city || addr.town || '',
+            county: addr.county || '',
+            region: addr.state || addr.province || '',
+            country: addr.country || '',
+            postal: addr.postcode || '',
+            display_name: locationiqData.display_name || '',
+            importance: locationiqData.importance || 0
+          };
+        } else {
+          throw new Error(`LocationIQ error! status: ${locationiqResponse.status}`);
+        }
+      } catch (err) {
+        console.error('LocationIQ reverse geocoding failed:', err.message);
+        locationData = {
+          latitude: lat,
+          longitude: lon,
+          error: 'LocationIQ lookup failed'
+        };
+      }
+    }
 
     return new Response(JSON.stringify({
       localIP: ip,
       publicIP: publicIP || lookupIP,
-      ip: data.ip || lookupIP,
-      city: data.city || '',
-      region: data.region || '',
-      country: data.country || '',
-      postal: data.postal || '',
-      timezone: data.timezone || '',
-      latitude: data.loc ? data.loc.split(',')[0] : '',
-      longitude: data.loc ? data.loc.split(',')[1] : '',
-      org: data.org || '',
-      isp: data.org || '',
-      hostname: data.hostname || '',
-      loc: data.loc || ''
+      ip: lookupIP,
+      ...locationData
     }), {
       headers: { 
         'Content-Type': 'application/json',
@@ -82,11 +108,10 @@ export async function GET({ request, clientAddress }) {
       }
     });
   } catch (error) {
-    console.error('Error fetching IP info:', error);
+    console.error('Error in IP info endpoint:', error);
     return new Response(JSON.stringify({ 
-      error: 'Failed to fetch IP info', 
-      details: error.message,
-      message: 'Please check Vercel logs'
+      error: 'Failed to fetch location info', 
+      details: error.message
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }

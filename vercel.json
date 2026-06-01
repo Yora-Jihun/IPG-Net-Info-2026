@@ -1,7 +1,1 @@
-{
-  "name": "space-app",
-  "regions": ["sfo1"],
-  "env": {
-    "INFO_TOKEN": "@info_token"
-  }
-}
+{"env": {"INFO_TOKEN": "5779678ae682d8"}, "regions": ["sfo1"]}

@@ -167,21 +167,33 @@ import Layout from '../layouts/Layout.astro';
     if (ip.localIP) html += createDataItem('Local IP', ip.localIP, 'network');
     if (ip.publicIP) html += createDataItem('Public IP', ip.publicIP, 'network');
     if (ip.ip) html += createDataItem('IP Address', ip.ip, 'network');
-    if (ip.country) html += createDataItem('Country', ip.country, 'location');
-    if (ip.region) html += createDataItem('Region', ip.region, 'location');
+    
+    // LocationIQ Data
+    if (ip.address) html += createDataItem('Street Address', ip.address, 'location');
+    if (ip.house_number) html += createDataItem('House #', ip.house_number, 'location');
+    if (ip.neighbourhood) html += createDataItem('Neighbourhood', ip.neighbourhood, 'location');
     if (ip.city) html += createDataItem('City', ip.city, 'location');
+    if (ip.county) html += createDataItem('County', ip.county, 'location');
+    if (ip.region) html += createDataItem('Region', ip.region, 'location');
+    if (ip.country) html += createDataItem('Country', ip.country, 'location');
     if (ip.postal) html += createDataItem('Postal Code', ip.postal, 'location');
-    if (ip.timezone) html += createDataItem('Timezone', ip.timezone, 'location');
+    if (ip.latitude && ip.longitude) html += createDataItem('Coordinates', `${ip.latitude}, ${ip.longitude}`, 'gps');
+    if (ip.display_name) html += createDataItem('Full Address', ip.display_name, 'location');
     if (ip.org) html += createDataItem('ISP', ip.org, 'tech');
-    if (ip.hostname) html += createDataItem('Hostname', ip.hostname, 'tech');
-    if (ip.loc) html += createDataItem('Coordinates', ip.loc, 'gps');
     
     ipDetails.innerHTML = html;
   };
 
-  const fetchIPInfo = async () => {
+  const fetchIPInfo = async (latitude = null, longitude = null) => {
     try {
-      const response = await fetch("/api/ipinfo");
+      const params = new URLSearchParams();
+      if (latitude && longitude) {
+        params.append('lat', latitude);
+        params.append('lon', longitude);
+      }
+      
+      const url = `/api/ipinfo${params.toString() ? '?' + params.toString() : ''}`;
+      const response = await fetch(url);
       const data = await response.json();
       
       if (data.error) {
@@ -189,10 +201,10 @@ import Layout from '../layouts/Layout.astro';
         return null;
       }
       
-      console.log("IP Info:", data);
+      console.log("Location Info:", data);
       return data;
     } catch (err) {
-      console.error("Failed to fetch IP info:", err);
+      console.error("Failed to fetch location info:", err);
       return null;
     }
   };
@@ -232,12 +244,12 @@ import Layout from '../layouts/Layout.astro';
           }
           
           showError(errorText);
-          showStatus("Using network-based location...", "loading");
+          showStatus("Fetching network info...", "loading");
           
           const ipData = await fetchIPInfo();
           if (ipData) {
             showIP(ipData);
-            showStatus("Network-based location loaded", "success");
+            showStatus("Network information loaded", "success");
           } else {
             showStatus("Unable to detect location", "error");
           }
@@ -246,11 +258,11 @@ import Layout from '../layouts/Layout.astro';
       );
     } else {
       showError("GPS is not supported by your browser");
-      showStatus("Using network-based location...", "loading");
+      showStatus("Fetching network info...", "loading");
       const ipData = await fetchIPInfo();
       if (ipData) {
         showIP(ipData);
-        showStatus("Network-based location loaded", "success");
+        showStatus("Network information loaded", "success");
       }
     }
   };
@@ -265,12 +277,13 @@ import Layout from '../layouts/Layout.astro';
           showStatus("Location detected", "success");
           showGPS({ latitude, longitude, accuracy, altitude, heading, speed });
           
-          const ipData = await fetchIPInfo();
+          // Pass coordinates to API for LocationIQ reverse geocoding
+          const ipData = await fetchIPInfo(latitude, longitude);
           if (ipData) {
             showIP(ipData);
             showStatus("All information loaded", "success");
           } else {
-            showStatus("GPS loaded (network info unavailable)", "success");
+            showStatus("GPS loaded (location info unavailable)", "success");
           }
         },
         async (err) => {
@@ -284,11 +297,11 @@ import Layout from '../layouts/Layout.astro';
               showIP(ipData);
             }
           } else {
-            showStatus("Using network-based location...", "loading");
+            showStatus("Fetching network info...", "loading");
             const ipData = await fetchIPInfo();
             if (ipData) {
               showIP(ipData);
-              showStatus("Network-based location loaded", "success");
+              showStatus("Network information loaded", "success");
               hideError();
             } else {
               showStatus("Unable to detect location", "error");
@@ -298,11 +311,11 @@ import Layout from '../layouts/Layout.astro';
         { timeout: 5000, enableHighAccuracy: true }
       );
     } else {
-      showStatus("Using network-based location...", "loading");
+      showStatus("Fetching network info...", "loading");
       const ipData = await fetchIPInfo();
       if (ipData) {
         showIP(ipData);
-        showStatus("Network-based location loaded", "success");
+        showStatus("Network information loaded", "success");
       }
     }
   })();

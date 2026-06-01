@@ -40,11 +40,8 @@ export async function GET({ request, clientAddress }) {
 
     const lookupIP = publicIP || ip;
 
-    // Get LocationIQ API key
+    // Get LocationIQ API key (optional — graceful fallback)
     const locationiqKey = process.env.LOCATIONIQ_KEY || import.meta.env.LOCATIONIQ_KEY;
-    if (!locationiqKey) {
-      throw new Error('LocationIQ API key not configured in .env');
-    }
 
     // Parse query parameters for coordinates
     const url = new URL(request.url);
@@ -53,46 +50,69 @@ export async function GET({ request, clientAddress }) {
 
     let locationData = {};
 
-    // If coordinates are provided, use LocationIQ reverse geocoding
+    const reverseGeocode = async (latitude, longitude, key) => {
+      if (!key) throw new Error('No LocationIQ key');
+      const locationiqUrl = `https://us1.locationiq.com/v1/reverse.php?key=${key}&lat=${latitude}&lon=${longitude}&format=json`;
+      const locationiqResponse = await fetch(locationiqUrl, {
+        headers: { 'User-Agent': 'IPG-App/1.0' }
+      });
+      if (!locationiqResponse.ok) throw new Error(`LocationIQ error! status: ${locationiqResponse.status}`);
+      const locationiqData = await locationiqResponse.json();
+      const addr = locationiqData.address || {};
+      return {
+        latitude: latitude.toString(),
+        longitude: longitude.toString(),
+        address: addr.road || '',
+        house_number: addr.house_number || '',
+        neighbourhood: addr.neighbourhood || '',
+        city: addr.city || addr.town || '',
+        county: addr.county || '',
+        region: addr.state || addr.province || '',
+        country: addr.country || '',
+        postal: addr.postcode || '',
+        display_name: locationiqData.display_name || '',
+        importance: locationiqData.importance || 0
+      };
+    };
+
+    // 1) If GPS coords provided, use them directly
     if (lat && lon) {
       try {
-        const locationiqUrl = `https://us1.locationiq.com/v1/reverse.php?key=${locationiqKey}&lat=${lat}&lon=${lon}&format=json`;
-        console.log('Fetching LocationIQ reverse geocoding for:', `${lat},${lon}`);
-
-        const locationiqResponse = await fetch(locationiqUrl, {
-          headers: { 'User-Agent': 'IPG-App/1.0' }
-        });
-
-        if (locationiqResponse.ok) {
-          const locationiqData = await locationiqResponse.json();
-          console.log("LocationIQ Response:", locationiqData);
-
-          // Extract detailed address information from LocationIQ
-          const addr = locationiqData.address || {};
-          locationData = {
-            latitude: lat,
-            longitude: lon,
-            address: addr.road || '',
-            house_number: addr.house_number || '',
-            neighbourhood: addr.neighbourhood || '',
-            city: addr.city || addr.town || '',
-            county: addr.county || '',
-            region: addr.state || addr.province || '',
-            country: addr.country || '',
-            postal: addr.postcode || '',
-            display_name: locationiqData.display_name || '',
-            importance: locationiqData.importance || 0
-          };
-        } else {
-          throw new Error(`LocationIQ error! status: ${locationiqResponse.status}`);
-        }
+        locationData = await reverseGeocode(lat, lon, locationiqKey);
       } catch (err) {
         console.error('LocationIQ reverse geocoding failed:', err.message);
-        locationData = {
-          latitude: lat,
-          longitude: lon,
-          error: 'LocationIQ lookup failed'
-        };
+      }
+    }
+
+    // 2) Otherwise, try IP-based geolocation → LocationIQ
+    if (!lat || !lon || Object.keys(locationData).length === 0) {
+      try {
+        const ipLookupUrl = `https://ipapi.co/${lookupIP}/json/`;
+        const ipResponse = await fetch(ipLookupUrl, {
+          headers: { 'User-Agent': 'IPG-App/1.0' }
+        });
+        if (ipResponse.ok) {
+          const ipData = await ipResponse.json();
+          if (ipData.latitude && ipData.longitude) {
+            try {
+              locationData = await reverseGeocode(ipData.latitude, ipData.longitude, locationiqKey);
+            } catch (err) {
+              console.error('LocationIQ reverse geocoding failed (IP-based):', err.message);
+              locationData = {
+                latitude: ipData.latitude.toString(),
+                longitude: ipData.longitude.toString(),
+                city: ipData.city || '',
+                region: ipData.region || '',
+                country: ipData.country_name || '',
+                postal: ipData.postal || ''
+              };
+            }
+          } else {
+            locationData = { ...ipData };
+          }
+        }
+      } catch (err) {
+        console.error('IP geolocation lookup failed:', err.message);
       }
     }
 

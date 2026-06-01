@@ -116,12 +116,16 @@ export async function GET({ request, clientAddress }) {
       }
     }
 
-    return new Response(JSON.stringify({
+    const responseBody = {
       localIP: ip,
       publicIP: publicIP || lookupIP,
       ip: lookupIP,
       ...locationData
-    }), {
+    };
+
+    console.log('Final API Response:', JSON.stringify(responseBody));
+
+    return new Response(JSON.stringify(responseBody), {
       headers: { 
         'Content-Type': 'application/json',
         'Cache-Control': 'no-cache'

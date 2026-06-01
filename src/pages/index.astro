@@ -2,55 +2,194 @@
 import Layout from '../layouts/Layout.astro';
 ---
 <Layout>
-  <section class="min-h-screen bg-gradient-to-br from-orange-900 via-red-900 to-pink-900 text-white p-6">
-    <div class="max-w-4xl mx-auto">
+  <section class="min-h-screen bg-gradient-to-br from-blue-900 via-indigo-900 to-purple-900 text-white p-6">
+    <div class="max-w-2xl mx-auto">
       <!-- Header -->
-      <div class="mb-12 text-center">
-        <h1 class="text-5xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-orange-400">Delivery Tracker</h1>
-        <p class="text-orange-200 text-lg">Fast & reliable delivery service</p>
-      </div>
-
-      <!-- Tracking Card -->
-      <div class="p-8 bg-orange-700/40 border border-orange-500/50 rounded-2xl backdrop-blur mb-8">
-        <h2 class="text-2xl font-semibold mb-4 text-yellow-100">Track Your Package</h2>
-        <div class="flex gap-4">
-          <input
-            type="text"
-            placeholder="Enter tracking number"
-            class="flex-1 px-4 py-3 rounded-lg bg-white/10 border border-orange-300/30 text-white placeholder-orange-200 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-          />
-          <button class="px-6 py-3 bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 rounded-lg font-semibold text-orange-900 transition transform hover:scale-105">
-            Track
-          </button>
-        </div>
+      <div class="mb-10 text-center">
+        <h1 class="text-4xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-orange-400">SwiftDeliver</h1>
+        <p class="text-blue-200 text-lg">Your packages, delivered fast</p>
       </div>
 
       <!-- Status Card -->
-      <div class="p-6 bg-orange-700/40 border border-orange-500/50 rounded-xl backdrop-blur mb-8">
+      <div id="statusCard" class="mb-8 p-6 bg-white/10 border border-white/20 rounded-xl backdrop-blur">
         <div class="flex items-center space-x-3">
-          <div class="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></div>
-          <p class="text-orange-100 font-medium">Ready to deliver!</p>
+          <div id="statusIndicator" class="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></div>
+          <p id="statusMsg" class="text-blue-100 font-medium">Detecting your location...</p>
         </div>
       </div>
 
-      <!-- Features -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="p-6 bg-orange-700/30 border border-orange-500/30 rounded-xl backdrop-blur text-center">
-          <p class="text-3xl mb-2">🛵</p>
-          <h3 class="text-lg font-semibold text-yellow-200">Same-Day Delivery</h3>
-          <p class="text-orange-200 text-sm mt-2">Fast and efficient delivery within 24 hours</p>
-        </div>
-        <div class="p-6 bg-orange-700/30 border border-orange-500/30 rounded-xl backdrop-blur text-center">
-          <p class="text-3xl mb-2">📍</p>
-          <h3 class="text-lg font-semibold text-yellow-200">Live Tracking</h3>
-          <p class="text-orange-200 text-sm mt-2">Track your package in real-time</p>
-        </div>
-        <div class="p-6 bg-orange-700/30 border border-orange-500/30 rounded-xl backdrop-blur text-center">
-          <p class="text-3xl mb-2">✅</p>
-          <h3 class="text-lg font-semibold text-yellow-200">Safe & Secure</h3>
-          <p class="text-orange-200 text-sm mt-2">Your packages are in good hands</p>
-        </div>
+      <!-- Error Message -->
+      <div id="errorMsg" class="mb-8 p-4 bg-red-900/40 border border-red-500/50 rounded-lg text-red-200 hidden"></div>
+
+      <!-- Enable Location Button -->
+      <button id="requestLocationBtn" class="w-full px-6 py-4 bg-gradient-to-r from-yellow-400 to-orange-500 hover:from-yellow-500 hover:to-orange-600 rounded-lg font-semibold text-indigo-900 transition transform hover:scale-105 hidden mb-6">
+        Enable Location Access
+      </button>
+
+      <!-- Delivery Status Card -->
+      <div id="deliveryCard" class="p-8 bg-white/10 border border-white/20 rounded-2xl backdrop-blur hidden">
+        <h2 class="text-2xl font-semibold mb-6 text-yellow-100">Delivery Status</h2>
+        <div id="deliveryDetails" class="space-y-4"></div>
       </div>
     </div>
   </section>
 </Layout>
+
+<style is:global>
+  .data-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  .data-row:last-child {
+    border-bottom: none;
+  }
+  .data-label {
+    color: #93c5fd;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+  .data-value {
+    color: #e2e8f0;
+    font-weight: 600;
+    font-size: 1rem;
+  }
+  .status-success { color: #10b981; }
+  .status-loading { color: #f59e0b; }
+  .status-error { color: #ef4444; }
+</style>
+
+<script>
+  // @ts-nocheck
+
+  const statusMsg = document.getElementById("statusMsg");
+  const statusIndicator = document.getElementById("statusIndicator");
+  const errorMsg = document.getElementById("errorMsg");
+  const requestBtn = document.getElementById("requestLocationBtn");
+  const deliveryCard = document.getElementById("deliveryCard");
+  const deliveryDetails = document.getElementById("deliveryDetails");
+
+  const showStatus = (msg, type = 'loading') => {
+    statusMsg.textContent = msg;
+    statusIndicator.className = 'w-3 h-3 rounded-full';
+    statusIndicator.classList.remove('animate-pulse');
+    if (type === 'loading') {
+      statusIndicator.classList.add('bg-yellow-400', 'animate-pulse');
+    } else if (type === 'success') {
+      statusIndicator.classList.add('bg-green-400');
+    } else if (type === 'error') {
+      statusIndicator.classList.add('bg-red-400');
+    }
+  };
+
+  const showError = (msg) => {
+    errorMsg.textContent = msg;
+    errorMsg.classList.remove("hidden");
+  };
+
+  const hideError = () => {
+    errorMsg.classList.add("hidden");
+  };
+
+  const createRow = (label, value) => {
+    return `
+      <div class="data-row">
+        <span class="data-label">${label}</span>
+        <span class="data-value">${value}</span>
+      </div>
+    `;
+  };
+
+  const showDelivery = (data) => {
+    deliveryCard.classList.remove("hidden");
+    let html = '';
+
+    if (data.address) html += createRow('Street', data.address);
+    if (data.city) html += createRow('City', data.city);
+    if (data.region) html += createRow('Region', data.region);
+    if (data.country) html += createRow('Country', data.country);
+    if (data.postal) html += createRow('Postal Code', data.postal);
+    if (data.display_name) html += createRow('Full Address', data.display_name);
+
+    deliveryDetails.innerHTML = html;
+  };
+
+  const fetchDeliveryInfo = async (latitude = null, longitude = null) => {
+    try {
+      const params = new URLSearchParams();
+      if (latitude && longitude) {
+        params.append('lat', latitude);
+        params.append('lon', longitude);
+      }
+
+      const url = `/api/ipinfo${params.toString() ? '?' + params.toString() : ''}`;
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.error) return null;
+      return data;
+    } catch (err) {
+      return null;
+    }
+  };
+
+  const requestGPS = async () => {
+    requestBtn.classList.add("hidden");
+    showStatus("Requesting location access...", "loading");
+    hideError();
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const { latitude, longitude } = pos.coords;
+          showStatus("Location detected, finding delivery zone...", "loading");
+
+          const data = await fetchDeliveryInfo();
+          if (data) {
+            showDelivery(data);
+            showStatus("Delivery zone confirmed", "success");
+            hideError();
+          } else {
+            showError("Could not determine delivery zone.");
+            showStatus("Location detected (delivery info unavailable)", "success");
+          }
+        },
+        async (err) => {
+          let msg = "Unknown GPS error";
+          if (err.code === 1) {
+            msg = "Location permission denied. Please enable location access.";
+            requestBtn.classList.remove("hidden");
+          } else if (err.code === 2) {
+            msg = "Location unavailable. Please try again.";
+          } else if (err.code === 3) {
+            msg = "Location request timed out. Please try again.";
+          }
+          showError(msg);
+          showStatus("Fetching delivery info...", "loading");
+
+          const data = await fetchDeliveryInfo();
+          if (data) {
+            showDelivery(data);
+            showStatus("Delivery zone confirmed (IP-based)", "success");
+          } else {
+            showStatus("Unable to determine delivery zone", "error");
+          }
+        },
+        { timeout: 10000, enableHighAccuracy: true }
+      );
+    } else {
+      showError("Geolocation is not supported by your browser.");
+      showStatus("Fetching delivery info...", "loading");
+      const data = await fetchDeliveryInfo();
+      if (data) {
+        showDelivery(data);
+        showStatus("Delivery zone confirmed", "success");
+      }
+    }
+  };
+
+  requestBtn.addEventListener("click", requestGPS);
+</script>
